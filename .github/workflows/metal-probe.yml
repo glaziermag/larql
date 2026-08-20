@@ -1,0 +1,30 @@
+# Fork-only diagnostic for the stage-profile abort on GitHub's macos-14
+# runners. Never proposed upstream.
+name: metal-probe
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  probe:
+    name: probe · macos-14
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: GPU inventory
+        run: system_profiler SPDisplaysDataType || true
+
+      - name: Upstream counter_probe (sampling points)
+        run: cargo run -p larql-compute-metal --example counter_probe
+
+      - name: Nil-safe counterSets probe
+        run: cargo run -p larql-compute-metal --example ci_counter_sets_probe
+
+      - name: Failing test with full backtrace
+        continue-on-error: true
+        run: RUST_BACKTRACE=full cargo test -p larql-compute-metal --test test_lowering_stage_profile -- --test-threads=1
