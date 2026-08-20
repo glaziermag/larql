@@ -4,6 +4,8 @@ name: metal-probe
 
 on:
   workflow_dispatch: {}
+  push:
+    branches: [repro-stage-profile-probe]
 
 jobs:
   probe:
