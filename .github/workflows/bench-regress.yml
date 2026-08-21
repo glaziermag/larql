@@ -78,7 +78,7 @@ jobs:
           # exits 2. Treat as neutral: the first PR after CI is stood
           # up shouldn't fail just because there's no baseline yet.
           set +e
-          make bench-check
+          bash scripts/bench-regress.sh check
           rc=$?
           set -e
           if [ "$rc" -eq 2 ]; then

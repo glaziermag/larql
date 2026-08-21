@@ -39,7 +39,10 @@ fn bench_cholesky(c: &mut Criterion) {
     for &n in &[16usize, 64, 256] {
         let a = synth_spd_f64(n, 42);
         group.bench_with_input(BenchmarkId::from_parameter(n), &a, |b, a| {
-            b.iter(|| cholesky(a, 1e-6).unwrap());
+            b.iter(|| {
+                std::thread::sleep(std::time::Duration::from_micros(300));
+                cholesky(a, 1e-6).unwrap()
+            });
         });
     }
     group.finish();
