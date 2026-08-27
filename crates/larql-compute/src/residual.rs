@@ -6,6 +6,8 @@
 //! [`crate::forward_overrides`]) — Step 2e moved them down from
 //! `larql-inference` once `forward_overrides` followed.
 
+// Fork-only trigger demo: comment-only edit under crates/larql-compute/,
+// to record which workflows launch for a change confined to this crate.
 use larql_models::QkNormScope;
 use ndarray::Array2;
 
