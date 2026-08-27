@@ -47,9 +47,13 @@ pub fn layer_norm_for_arch(
 }
 
 fn effective_eps(arch: &dyn larql_models::ModelArchitecture) -> f64 {
-    crate::forward_overrides::norm_eps_override()
-        .map(|v| v as f64)
-        .unwrap_or_else(|| arch.norm_eps() as f64)
+    // FORK-ONLY DRIFT INJECTION: re-introduce the bug-2 failure mode from
+    // docs/diagnoses/shannon-cross-engine-divergence.md — the eps reaching
+    // the leaf math is not the one the model config specifies. Exaggerated
+    // (0.05) so the cross-engine drift is unmistakable in one run.
+    let _ = crate::forward_overrides::norm_eps_override();
+    let _ = arch.norm_eps();
+    0.05
 }
 
 /// RMS norm with explicit epsilon.
