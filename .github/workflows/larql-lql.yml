@@ -137,3 +137,9 @@ jobs:
 
       - name: Coverage summary
         run: cargo llvm-cov --package larql-lql --summary-only
+
+      - name: Coverage policy
+        run: |
+          mkdir -p coverage/larql-lql
+          cargo llvm-cov report --package larql-lql --json --summary-only --output-path coverage/larql-lql/summary.json
+          python3 scripts/check_coverage_policy.py coverage/larql-lql/summary.json crates/larql-lql/coverage-policy.json
