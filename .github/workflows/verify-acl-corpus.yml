@@ -1,0 +1,57 @@
+name: Verify committed corpus BibTeX export
+on:
+  push:
+    branches: [codex/verify-acl-corpus-20260904]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        repeat: [1, 2]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: acl-org/acl-anthology
+          ref: 87b7785fa0c1847aec3b8641990324ddb14dc8a4
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          python-version: '3.14'
+          working-directory: python
+      - name: Install dependencies
+        working-directory: python
+        run: uv sync --locked
+      - name: Citation module baseline
+        working-directory: python
+        run: |
+          uv run python -c "import TexSoup"
+          uv run pytest tests/collections/paper_test.py
+      - name: Export committed records through public API
+        working-directory: python
+        run: |
+          uv run python -u - <<'PY'
+          from acl_anthology import Anthology
+          from acl_anthology.constants import NO_BIBKEY
+
+          anthology = Anthology.from_within_repo()
+          count = 0
+          for paper in anthology.papers():
+              if paper.bibkey == NO_BIBKEY:
+                  continue
+              try:
+                  paper.to_bibtex()
+              except Exception:
+                  print(f"FAILED_RECORD={paper.full_id}", flush=True)
+                  raise
+              count += 1
+              if count % 10000 == 0:
+                  print(f"Exported {count} committed records", flush=True)
+          print(f"SUCCESS: exported {count} committed records", flush=True)
+          PY
