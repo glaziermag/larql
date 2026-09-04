@@ -1,0 +1,41 @@
+name: Verify published Windows release
+on:
+  push:
+    branches: [codex/verify-windows-release-20260904]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  published-release:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        repeat: [1, 2]
+    steps:
+      - name: Download exact upstream release
+        shell: pwsh
+        run: |
+          $url = 'https://github.com/chrishayuk/larql/releases/download/vindex-v0.8.0/larql-x86_64-pc-windows-msvc.zip'
+          Invoke-WebRequest $url -OutFile release.zip
+          Get-FileHash release.zip -Algorithm SHA256
+          Expand-Archive release.zip -DestinationPath released
+          Get-ChildItem released -Recurse | Select-Object FullName, Length
+      - name: Inspect executable imports
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" | Select-Object -Last 1
+          if ($dumpbin) { & $dumpbin.FullName /DEPENDENTS released/larql-x86_64-pc-windows-msvc/larql.exe }
+      - name: Run published CLI without build dependencies
+        shell: pwsh
+        run: |
+          Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public class ErrorMode { [DllImport("kernel32.dll")] public static extern uint SetErrorMode(uint mode); }'
+          [ErrorMode]::SetErrorMode(0x0001 -bor 0x0002) | Out-Null
+          $exe = (Resolve-Path released/larql-x86_64-pc-windows-msvc/larql.exe).Path
+          $proc = Start-Process $exe -ArgumentList '--version' -Wait -PassThru -NoNewWindow -RedirectStandardOutput version.stdout.txt -RedirectStandardError version.stderr.txt
+          Get-Content version.stdout.txt
+          Get-Content version.stderr.txt
+          Write-Output "CLI exit code: $($proc.ExitCode)"
+          if ($proc.ExitCode -ne 0) { exit 1 }
