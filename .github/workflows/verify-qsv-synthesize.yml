@@ -1,0 +1,77 @@
+name: Verify qsv committed synthesis corpus
+
+on:
+  push:
+    branches: [verify-qsv-synthesis-20260904]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        repeat: [1, 2]
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      RUST_BACKTRACE: '1'
+      QSV_MAX_JOBS: '2'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: dathere/qsv
+          ref: 92b3b5d51dc91f3f9df252acfbaf91b8610a16bd
+          persist-credentials: false
+      - name: Install system build dependency
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libwayland-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.0
+      - name: Run existing synthesis tests on clean upstream
+        run: cargo test --locked --bin qsv --test tests --features feature_capable,synthesize test_synthesize -- --test-threads=2
+      - name: Build documented CLI
+        run: cargo build --locked --bin qsv --features feature_capable,synthesize
+      - name: Run one operation over committed example CSVs
+        run: |
+          python3 - <<'PY'
+          import csv
+          import hashlib
+          import json
+          import pathlib
+          import shutil
+          import subprocess
+          import tempfile
+
+          root = pathlib.Path.cwd()
+          binary = root / 'target/debug/qsv'
+          files = sorted((root / 'examples/viz').glob('*.csv'))
+          assert len(files) == 23, len(files)
+          assert sum(p.stat().st_size for p in files) == 12651627
+          print(json.dumps({'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(), 'corpus_files': len(files)}), flush=True)
+          for source in files:
+              with tempfile.TemporaryDirectory(prefix='qsv-synthesis-') as directory:
+                  case = pathlib.Path(directory)
+                  copied = case / source.name
+                  output = case / 'synthetic.csv'
+                  shutil.copy2(source, copied)
+                  assert source.read_bytes() == copied.read_bytes()
+                  command = [str(binary), 'synthesize', str(copied), '-n', '100', '--seed', '42', '-o', str(output)]
+                  result = subprocess.run(command, cwd=case, capture_output=True, text=True, timeout=180)
+                  record = {'input': str(source.relative_to(root)), 'sha256': hashlib.sha256(source.read_bytes()).hexdigest(), 'returncode': result.returncode}
+                  if output.exists():
+                      with output.open(newline='') as stream:
+                          record['output_rows'] = max(0, sum(1 for _ in csv.reader(stream)) - 1)
+                  print(json.dumps(record), flush=True)
+                  if result.returncode:
+                      print(result.stderr[-10000:], flush=True)
+                      raise SystemExit(result.returncode)
+          print('Completed the same documented operation on all 23 committed CSV files.', flush=True)
+          PY
