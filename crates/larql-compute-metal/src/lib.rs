@@ -169,3 +169,5 @@ mod tests {
         let _ = metal_backend_with_options(BackendOptions::default());
     }
 }
+
+// probe: comment-only change inside larql-compute-metal (no code change)
